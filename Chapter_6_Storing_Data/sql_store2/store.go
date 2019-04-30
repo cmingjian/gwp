@@ -4,18 +4,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	_ "github.com/lib/pq"
+	//_ "github.com/lib/pq"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type Post struct {
-	Id       int
+	Id       int64
 	Content  string
 	Author   string
 	Comments []Comment
 }
 
 type Comment struct {
-	Id      int
+	Id      int64
 	Content string
 	Author  string
 	Post    *Post
@@ -26,7 +27,7 @@ var Db *sql.DB
 // connect to the Db
 func init() {
 	var err error
-	Db, err = sql.Open("postgres", "user=gwp dbname=gwp password=gwp sslmode=disable")
+	Db, err = sql.Open("mysql", "cmj:123456a@tcp(127.0.0.1:3306)/gwp")
 	if err != nil {
 		panic(err)
 	}
@@ -37,17 +38,24 @@ func (comment *Comment) Create() (err error) {
 		err = errors.New("Post not found")
 		return
 	}
-	err = Db.QueryRow("insert into comments (content, author, post_id) values ($1, $2, $3) returning id", comment.Content, comment.Author, comment.Post.Id).Scan(&comment.Id)
+	res, err := Db.Exec("insert into comments (content, author, post_id) values (?, ?, ?)", comment.Content, comment.Author, comment.Post.Id)
+	if err != nil {
+		panic(err)
+	}
+	comment.Id, err = res.LastInsertId()
+	if err != nil {
+		panic(err)
+	}
 	return
 }
 
 // Get a single post
-func GetPost(id int) (post Post, err error) {
+func GetPost(id int64) (post Post, err error) {
 	post = Post{}
 	post.Comments = []Comment{}
-	err = Db.QueryRow("select id, content, author from posts where id = $1", id).Scan(&post.Id, &post.Content, &post.Author)
+	err = Db.QueryRow("select id, content, author from posts where id = ?", id).Scan(&post.Id, &post.Content, &post.Author)
 
-	rows, err := Db.Query("select id, content, author from comments where post_id = $1", id)
+	rows, err := Db.Query("select id, content, author from comments where post_id = ?", id)
 	if err != nil {
 		return
 	}
@@ -65,7 +73,14 @@ func GetPost(id int) (post Post, err error) {
 
 // Create a new post
 func (post *Post) Create() (err error) {
-	err = Db.QueryRow("insert into posts (content, author) values ($1, $2) returning id", post.Content, post.Author).Scan(&post.Id)
+	res, err := Db.Exec("insert into posts (content, author) values (?, ?)", post.Content, post.Author)
+	if err != nil {
+		panic(err)
+	}
+	post.Id, err = res.LastInsertId()
+	if err != nil {
+		panic(err)
+	}
 	return
 }
 

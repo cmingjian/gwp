@@ -3,11 +3,12 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/lib/pq"
+	//_ "github.com/lib/pq"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type Post struct {
-	Id      int
+	Id      int64
 	Content string
 	Author  string
 }
@@ -17,7 +18,7 @@ var Db *sql.DB
 // connect to the Db
 func init() {
 	var err error
-	Db, err = sql.Open("postgres", "user=gwp dbname=gwp password=gwp sslmode=disable")
+	Db, err = sql.Open("mysql", "cmj:123456a@tcp(127.0.0.1:3306)/gwp")
 	if err != nil {
 		panic(err)
 	}
@@ -25,15 +26,15 @@ func init() {
 
 // get all posts
 func Posts(limit int) (posts []Post, err error) {
-	rows, err := Db.Query("select id, content, author from posts limit $1", limit)
+	rows, err := Db.Query("select id, content, author from posts limit ?", limit)
 	if err != nil {
-		return
+		panic(err)
 	}
 	for rows.Next() {
 		post := Post{}
 		err = rows.Scan(&post.Id, &post.Content, &post.Author)
 		if err != nil {
-			return
+			panic(err)
 		}
 		posts = append(posts, post)
 	}
@@ -42,45 +43,61 @@ func Posts(limit int) (posts []Post, err error) {
 }
 
 // Get a single post
-func GetPost(id int) (post Post, err error) {
+func GetPost(id int64) (post Post, err error) {
 	post = Post{}
-	err = Db.QueryRow("select id, content, author from posts where id = $1", id).Scan(&post.Id, &post.Content, &post.Author)
+	err = Db.QueryRow("select id, content, author from posts where id = ?", id).Scan(&post.Id, &post.Content, &post.Author)
 	return
 }
 
 // Create a new post
 func (post *Post) Create() (err error) {
-	statement := "insert into posts (content, author) values ($1, $2) returning id"
+	statement := "insert into posts (content, author) values (?, ?)"
 	stmt, err := Db.Prepare(statement)
 	if err != nil {
-		return
+		panic(err)
 	}
 	defer stmt.Close()
-	err = stmt.QueryRow(post.Content, post.Author).Scan(&post.Id)
+	res, err := stmt.Exec(post.Content, post.Author)
+	if err != nil {
+		panic(err)
+	}
+	post.Id, err = res.LastInsertId()
+	if err != nil {
+		panic(err)
+	}
 	return
 }
 
 // Update a post
 func (post *Post) Update() (err error) {
-	_, err = Db.Exec("update posts set content = $2, author = $3 where id = $1", post.Id, post.Content, post.Author)
+	_, err = Db.Exec("update posts set content = ?, author = ? where id = ?", post.Content, post.Author, post.Id)
+	if err != nil {
+		panic(err)
+	}
 	return
 }
 
 // Delete a post
 func (post *Post) Delete() (err error) {
-	_, err = Db.Exec("delete from posts where id = $1", post.Id)
+	_, err = Db.Exec("delete from posts where id = ?", post.Id)
+	if err != nil {
+		panic(err)
+	}
 	return
 }
 
 // Delete all posts
 func DeleteAll() (err error) {
 	_, err = Db.Exec("delete from posts")
+	if err != nil {
+		panic(err)
+	}
 	return
 }
 
 func main() {
+	DeleteAll()
 	post := Post{Content: "Hello World!", Author: "Sau Sheong"}
-
 	// Create a post
 	fmt.Println(post) // {0 Hello World! Sau Sheong}
 	post.Create()
@@ -107,5 +124,5 @@ func main() {
 	fmt.Println(posts) // []
 
 	// Delete all posts
-  // DeleteAll()
+  	DeleteAll()
 }
